@@ -30,19 +30,19 @@ module Data.STSequence (
 
 where
 
-import Prelude ((+), return, ($), bind, (++), (*), (<=), (==))
+import Prelude ((+), return, ($), bind, (++), (*), (<=), (==), (<),(-))
 import Data.Array as A
 import Control.Monad.Eff (Eff)
-import Control.Monad.ST (ST)
+import Control.Monad.ST
 import Data.Int (round, toNumber)
-import Data.Function (Fn3, runFn3, Fn4, runFn4)
+import Data.Function (Fn2, runFn2, Fn3, runFn3, Fn4)
 import Extensions (undef,unsafeCoerce)
 
 foreign import data STArray :: * -> * -> *
 
 type STSequencePrim h a = {
     buffer :: STArray h a,
-    fillCounter :: Int
+    fillCounter :: STRef h Int
 }
 
 newtype STSequence h a = STSequence (STSequencePrim h a)
@@ -68,7 +68,13 @@ foreign import copyImpl :: forall a b h r. a -> Eff (st :: ST h | r) b
 -- | Change the value at the specified index in a mutable array.
 foreign import pokeSTArray :: forall a h r. Fn3 (STArray h a) Int a (Eff (st :: ST h | r) Boolean)
 
+-- | Change the value at the specified index in a mutable array.
+foreign import pokeAllSTArray :: forall a h r. Fn3 (STArray h a) Int (Array a) (Eff (st :: ST h | r) Boolean)
+
 foreign import spliceSTArray :: forall a h r. Fn4 (STArray h a) Int Int (Array a) (Eff (st :: ST h | r) (Array a))
+
+-- | Append the values in an immutable array to the end of a mutable array.
+foreign import pushAllSTArray :: forall a h r. Fn2 (STArray h a) (Array a) (Eff (st :: ST h | r) Int)
 
 --------------------------------------------------------------------------------
 -- STSequence creation ---------------------------------------------------------
@@ -82,23 +88,28 @@ initialSize = 30
 empty :: forall a h r. Eff (st :: ST h | r) (STSequence h a)
 empty = do
     a <- thaw (A.replicate initialSize (undef :: a))
-    return $ STSequence {buffer : a, fillCounter : 0}
+    ref <- newSTRef 0
+    return $ STSequence {buffer : a, fillCounter : ref}
 
 -- | Create a sequence with a single element.
 -- |
 emptyWithBufferSize :: forall a h r. Int -> Eff (st :: ST h | r) (STSequence h a)
 emptyWithBufferSize i = do
     a <- thaw (A.replicate i (undef :: a))
-    return $ STSequence {buffer : a, fillCounter : 0}
+    ref <- newSTRef 0
+    return $ STSequence {buffer : a, fillCounter : ref}
 
 fromArray ::  forall a h r. Array a -> Eff (st :: ST h | r) (STSequence h a)
 fromArray array = do
     let bufferGrowth = round (toNumber (A.length array) * 0.7)
     a <- thaw (array ++ A.replicate bufferGrowth (undef :: a))
-    return $ STSequence {buffer : a, fillCounter : A.length array}
+    ref <- newSTRef (A.length array)
+    return $ STSequence {buffer : a, fillCounter : ref}
 
 toArray ::  forall a h r. (STSequence h a) -> Eff (st :: ST h | r) (Array a)
-toArray (STSequence seq) = return (A.slice 0 seq.fillCounter (unsafeFreeze seq.buffer))
+toArray (STSequence seq) = do
+    fill <- readSTRef seq.fillCounter
+    return (A.slice 0 (fill + 1) (unsafeFreeze seq.buffer))
 
 --------------------------------------------------------------------------------
 -- STSequence size -------------------------------------------------------------------
@@ -107,13 +118,15 @@ toArray (STSequence seq) = return (A.slice 0 seq.fillCounter (unsafeFreeze seq.b
 -- | Test whether a sequence is empty.
 -- |
 -- | Running time: `O(1)`
-null :: forall h a. STSequence h a -> Boolean
-null seq = length seq == 0
+null :: forall h a r. STSequence h a -> Eff (st :: ST h | r) Boolean
+null seq = do
+    l <- length seq
+    return (l == 0)
 
 -- | Get the length of a sequence
 -- |
-length :: forall h a. STSequence h a ->  Int
-length (STSequence seq) = seq.fillCounter
+length :: forall h a r. STSequence h a ->  Eff (st :: ST h | r) Int
+length (STSequence seq) = readSTRef seq.fillCounter
 
 -- | Get the buffer size of a sequence
 -- |
@@ -126,33 +139,34 @@ bufferSize (STSequence seq) = A.length (unsafeFreeze seq.buffer)
 
 infixr 6 push as >>
 
--- | An infix alias for `Cons`; attaches an element to the front of
--- | a sequence.
--- |
--- | Running time: `O(1)`
+-- | Append an element to the end of a mutable sequence.
 push :: forall h a r. STSequence h a -> a -> Eff (st :: ST h | r) (STSequence h a)
-push s@(STSequence seq) ele =
-    if bufferSize s <= seq.fillCounter
+push s@(STSequence seq) ele = do
+    fill <- readSTRef seq.fillCounter
+    let bs = bufferSize s
+    if bs < fill
         then do
-                runFn3 pokeSTArray seq.buffer seq.fillCounter ele
-                return $ STSequence (seq{fillCounter = seq.fillCounter + 1})
+                runFn3 pokeSTArray seq.buffer fill ele
         else do
-                let bufferGrowth = round (toNumber (bufferSize s) * 0.7)
-                newBuffer <- thaw $ unsafeFreeze seq.buffer ++ A.replicate bufferGrowth (undef :: a)
-                runFn3 pokeSTArray newBuffer seq.fillCounter ele
-                return $ STSequence {buffer: newBuffer, fillCounter : seq.fillCounter + 1}
+                let bufferGrowth = round (toNumber bs * 0.7)
+                runFn2 pushAllSTArray seq.buffer (A.replicate bufferGrowth (undef :: a))
+                runFn3 pokeSTArray seq.buffer fill ele
+    modifySTRef seq.fillCounter (\i -> i + 1)
+    return s
 
-
+-- | Append the values in an immutable array to the end of a mutable sequence.
 pushAll :: forall h a r. STSequence h a -> Array a -> Eff (st :: ST h | r) (STSequence h a)
-pushAll s@(STSequence seq) r =
+pushAll s@(STSequence seq) r = do
+    fill <- length s
     let arrayLength = A.length r
-        totalSize = length s + arrayLength
-    in if totalSize <= bufferSize s
+        totalSize = fill + arrayLength
+    if totalSize <= bufferSize s
         then do
-            runFn4 spliceSTArray seq.buffer seq.fillCounter arrayLength r
-            return $ STSequence (seq{fillCounter = seq.fillCounter + arrayLength})
+            runFn3 pokeAllSTArray seq.buffer fill r
         else do
-            let bufferGrowth = round (toNumber totalSize * 0.7)
-            newBuffer <- thaw $ unsafeFreeze seq.buffer ++ A.replicate bufferGrowth (undef :: a)
-            runFn4 spliceSTArray newBuffer seq.fillCounter arrayLength r
-            return $ STSequence {buffer: newBuffer, fillCounter : seq.fillCounter + 1}
+            let bufferNewSize = round (toNumber totalSize * 1.7)
+                bufferGrowth = bufferNewSize - bufferSize s
+            runFn2 pushAllSTArray seq.buffer (A.replicate bufferGrowth (undef :: a))
+            runFn3 pokeAllSTArray seq.buffer fill r
+    writeSTRef seq.fillCounter totalSize
+    return s
