@@ -1,0 +1,21 @@
+{
+  "name": "purescript-STSequence",
+  "version": "1.0.0",
+  "moduleType": [
+    "node"
+  ],
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-arrays" : "",
+    "purescript-eff" : "",
+    "purescript-st" : "",
+    "purescript-extensions" : "",
+    "purescript-functions" : "",
+    "purescript-integers" : ""
+  }
+}
