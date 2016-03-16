@@ -25,12 +25,13 @@ module Data.STSequence (
 
     (>>),
     push,
-    pushAll
+    pushAll,
+    concat
     )
 
 where
 
-import Prelude ((+), return, ($), bind, (++), (*), (<=), (==), (<),(-))
+import Prelude ((+), return, ($), bind, (++), (*), (>=), (==), (>),(-))
 import Data.Array as A
 import Control.Monad.Eff (Eff)
 import Control.Monad.ST
@@ -46,6 +47,7 @@ type STSequencePrim h a = {
 }
 
 newtype STSequence h a = STSequence (STSequencePrim h a)
+
 
 --------------------------------------------------------------------------------
 -- Primitives ------------------------------------------------------------------
@@ -144,7 +146,7 @@ push :: forall h a r. STSequence h a -> a -> Eff (st :: ST h | r) (STSequence h 
 push s@(STSequence seq) ele = do
     fill <- readSTRef seq.fillCounter
     let bs = bufferSize s
-    if bs < fill
+    if bs > fill
         then do
                 runFn3 pokeSTArray seq.buffer fill ele
         else do
@@ -160,7 +162,7 @@ pushAll s@(STSequence seq) r = do
     fill <- length s
     let arrayLength = A.length r
         totalSize = fill + arrayLength
-    if totalSize <= bufferSize s
+    if bufferSize s >= totalSize
         then do
             runFn3 pokeAllSTArray seq.buffer fill r
         else do
@@ -170,3 +172,8 @@ pushAll s@(STSequence seq) r = do
             runFn3 pokeAllSTArray seq.buffer fill r
     writeSTRef seq.fillCounter totalSize
     return s
+
+concat  :: forall h a r. STSequence h a -> STSequence h a -> Eff (st :: ST h | r) (STSequence h a)
+concat s1 s2 = do
+    r <- toArray s2
+    pushAll s1 r
