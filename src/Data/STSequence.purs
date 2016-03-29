@@ -111,7 +111,7 @@ fromArray array = do
 toArray ::  forall a h r. (STSequence h a) -> Eff (st :: ST h | r) (Array a)
 toArray (STSequence seq) = do
     fill <- readSTRef seq.fillCounter
-    return (A.slice 0 (fill + 1) (unsafeFreeze seq.buffer))
+    return (A.slice 0 fill (unsafeFreeze seq.buffer))
 
 --------------------------------------------------------------------------------
 -- STSequence size -------------------------------------------------------------------
