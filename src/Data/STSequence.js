@@ -11,9 +11,9 @@ exports.emptySTArray = function () {
   return [];
 };
 
-exports.peekSTArrayImpl = function (just,nothing,xs,i) {
+exports.peekSTArrayImplUnsafe = function (xs,i) {
     return function () {
-      return i >= 0 && i < xs.length ? just(xs[i]) : nothing;
+      return xs[i];
     };
 };
 

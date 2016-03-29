@@ -32,12 +32,13 @@ module Data.STSequence (
 
 where
 
-import Prelude ((+), return, ($), bind, (++), (*), (>=), (==), (>),(-))
+import Prelude ((+), return, ($), bind, (++), (*), (>=), (==), (>),(-),(&&),(<), liftM1)
 import Data.Array as A
 import Control.Monad.Eff (Eff)
 import Control.Monad.ST
 import Data.Int (round, toNumber)
 import Data.Function (Fn2, runFn2, Fn3, runFn3, Fn4)
+import Data.Maybe (Maybe(Nothing, Just))
 import Extensions (undef,unsafeCoerce)
 
 foreign import data STArray :: * -> * -> *
@@ -79,16 +80,18 @@ foreign import spliceSTArray :: forall a h r. Fn4 (STArray h a) Int Int (Array a
 -- | Append the values in an immutable array to the end of a mutable array.
 foreign import pushAllSTArray :: forall a h r. Fn2 (STArray h a) (Array a) (Eff (st :: ST h | r) Int)
 
+foreign import peekSTArrayImplUnsafe :: forall a h e r. Fn2 (STArray h a) Int (Eff (st :: ST h | e) r)
+
 --------------------------------------------------------------------------------
 -- STSequence creation ---------------------------------------------------------
---------------------------------------------------------------------------------
+----------------------------
 
 initialSize :: Int
 initialSize = 30
 
 -- | Create a sequence with no elements.
 -- |
-empty :: forall a h r. Eff (st :: ST h | r) (STSequence h a)
+empty :: forall a h r. Eff (st :: ST h | r) (STSequence h a) 
 empty = do
     a <- thaw (A.replicate initialSize (undef :: a))
     ref <- newSTRef 0
@@ -179,3 +182,17 @@ concat  :: forall h a r. STSequence h a -> STSequence h a -> Eff (st :: ST h | r
 concat s1 s2 = do
     r <- toArray s2
     pushAll s1 r
+
+-- * Reading values
+
+-- | Read the value at the specified index in a mutable array.
+peek
+  :: forall a h r
+   . STSequence h a
+  -> Int
+  -> Eff (st :: ST h | r) (Maybe a)
+peek s@(STSequence seq) i = do
+    l <- length s
+    if i >= 0 && i < l
+        then liftM1 Just (runFn2 peekSTArrayImplUnsafe seq.buffer i)
+        else return Nothing
