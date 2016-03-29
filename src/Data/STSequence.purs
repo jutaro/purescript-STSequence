@@ -91,7 +91,7 @@ initialSize = 30
 
 -- | Create a sequence with no elements.
 -- |
-empty :: forall a h r. Eff (st :: ST h | r) (STSequence h a) 
+empty :: forall a h r. Eff (st :: ST h | r) (STSequence h a)
 empty = do
     a <- thaw (A.replicate initialSize (undef :: a))
     ref <- newSTRef 0
@@ -183,7 +183,7 @@ concat s1 s2 = do
     r <- toArray s2
     pushAll s1 r
 
--- * Reading values
+-- * Reading and updating values
 
 -- | Read the value at the specified index in a mutable array.
 peek
@@ -191,8 +191,19 @@ peek
    . STSequence h a
   -> Int
   -> Eff (st :: ST h | r) (Maybe a)
-peek s@(STSequence seq) i = do
-    l <- length s
+peek seq@(STSequence s) i = do
+    l <- length seq
     if i >= 0 && i < l
-        then liftM1 Just (runFn2 peekSTArrayImplUnsafe seq.buffer i)
+        then liftM1 Just (runFn2 peekSTArrayImplUnsafe s.buffer i)
         else return Nothing
+
+
+-- | Change the value at the specified index in a mutable array.
+poke :: forall a h r. STSequence h a -> Int -> a -> Eff (st :: ST h | r) Boolean
+poke seq@(STSequence s) i val = do
+    l <- length seq
+    if i >= 0 && i < l
+        then do
+            runFn3 pokeSTArray s.buffer i val
+            return true
+        else return false
