@@ -8,7 +8,8 @@
 -- Stability   :
 -- Portability :
 --
--- |
+-- | Mutable Sequences. Just a humble start.
+--  An enhanced version of STArrays.
 --
 -----------------------------------------------------------------------------
 
@@ -85,7 +86,7 @@ foreign import pushAllSTArray :: forall a h r. Fn2 (STArray h a) (Array a) (Eff 
 initialSize :: Int
 initialSize = 30
 
--- | Create a sequence with a single element.
+-- | Create a sequence with no elements.
 -- |
 empty :: forall a h r. Eff (st :: ST h | r) (STSequence h a)
 empty = do
@@ -93,7 +94,7 @@ empty = do
     ref <- newSTRef 0
     return $ STSequence {buffer : a, fillCounter : ref}
 
--- | Create a sequence with a single element.
+-- | Create a sequence with with no elements with a specified buffer size.
 -- |
 emptyWithBufferSize :: forall a h r. Int -> Eff (st :: ST h | r) (STSequence h a)
 emptyWithBufferSize i = do
@@ -101,6 +102,7 @@ emptyWithBufferSize i = do
     ref <- newSTRef 0
     return $ STSequence {buffer : a, fillCounter : ref}
 
+-- | Convert an array to a STSequence
 fromArray ::  forall a h r. Array a -> Eff (st :: ST h | r) (STSequence h a)
 fromArray array = do
     let bufferGrowth = round (toNumber (A.length array) * 0.7)
@@ -108,6 +110,7 @@ fromArray array = do
     ref <- newSTRef (A.length array)
     return $ STSequence {buffer : a, fillCounter : ref}
 
+-- | Convert a STSequence to an Array
 toArray ::  forall a h r. (STSequence h a) -> Eff (st :: ST h | r) (Array a)
 toArray (STSequence seq) = do
     fill <- readSTRef seq.fillCounter
@@ -118,15 +121,12 @@ toArray (STSequence seq) = do
 --------------------------------------------------------------------------------
 
 -- | Test whether a sequence is empty.
--- |
--- | Running time: `O(1)`
 null :: forall h a r. STSequence h a -> Eff (st :: ST h | r) Boolean
 null seq = do
     l <- length seq
     return (l == 0)
 
 -- | Get the length of a sequence
--- |
 length :: forall h a r. STSequence h a ->  Eff (st :: ST h | r) Int
 length (STSequence seq) = readSTRef seq.fillCounter
 
@@ -173,6 +173,8 @@ pushAll s@(STSequence seq) r = do
     writeSTRef seq.fillCounter totalSize
     return s
 
+-- | Concat two STSequences.
+-- TODO: optimize
 concat  :: forall h a r. STSequence h a -> STSequence h a -> Eff (st :: ST h | r) (STSequence h a)
 concat s1 s2 = do
     r <- toArray s2
