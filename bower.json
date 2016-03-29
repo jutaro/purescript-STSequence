@@ -1,6 +1,10 @@
 {
-  "name": "purescript-STSequence",
-  "version": "0.0.0",
+  "name": "purescript-stsequence",
+  "version": "0.0.1",
+    "repository": {                                                          
+      "type": "git",                                                         
+      "url": "git@github.com:jutaro/purescript-STSequence.git"            
+    },  
   "moduleType": [
     "node"
   ],
