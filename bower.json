@@ -1,6 +1,6 @@
 {
   "name": "purescript-STSequence",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "moduleType": [
     "node"
   ],
@@ -11,11 +11,11 @@
     "output"
   ],
   "dependencies": {
-    "purescript-arrays" : "",
-    "purescript-eff" : "",
-    "purescript-st" : "",
-    "purescript-extensions" : "",
-    "purescript-functions" : "",
-    "purescript-integers" : ""
+    "purescript-arrays": "",
+    "purescript-eff": "",
+    "purescript-st": "",
+    "purescript-extensions": "",
+    "purescript-functions": "",
+    "purescript-integers": ""
   }
 }
