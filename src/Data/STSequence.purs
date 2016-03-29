@@ -27,7 +27,10 @@ module Data.STSequence (
     (>>),
     push,
     pushAll,
-    concat
+    concat,
+
+    peek,
+    poke
     )
 
 where
