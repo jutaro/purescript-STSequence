@@ -26,6 +26,7 @@ module Data.STSequence (
 
     (>>),
     push,
+    pop,
     pushAll,
     concat,
 
@@ -35,14 +36,14 @@ module Data.STSequence (
 
 where
 
-import Prelude ((+), return, ($), bind, (++), (*), (>=), (==), (>),(-),(&&),(<), liftM1)
+import Control.Monad.ST
 import Data.Array as A
 import Control.Monad.Eff (Eff)
-import Control.Monad.ST
-import Data.Int (round, toNumber)
 import Data.Function (Fn2, runFn2, Fn3, runFn3, Fn4)
+import Data.Int (round, toNumber)
 import Data.Maybe (Maybe(Nothing, Just))
-import Extensions (undef,unsafeCoerce)
+import Extensions (undef, unsafeCoerce)
+import Prelude ((+), return, ($), bind, (++), (*), (>=), (==), (>), (-), (&&), (<), liftM1)
 
 foreign import data STArray :: * -> * -> *
 
@@ -83,7 +84,7 @@ foreign import spliceSTArray :: forall a h r. Fn4 (STArray h a) Int Int (Array a
 -- | Append the values in an immutable array to the end of a mutable array.
 foreign import pushAllSTArray :: forall a h r. Fn2 (STArray h a) (Array a) (Eff (st :: ST h | r) Int)
 
-foreign import peekSTArrayImplUnsafe :: forall a h e r. Fn2 (STArray h a) Int (Eff (st :: ST h | e) r)
+foreign import peekSTArrayImplUnsafe :: forall a h e. Fn2 (STArray h a) Int (Eff (st :: ST h | e) a)
 
 --------------------------------------------------------------------------------
 -- STSequence creation ---------------------------------------------------------
@@ -161,6 +162,18 @@ push s@(STSequence seq) ele = do
                 runFn3 pokeSTArray seq.buffer fill ele
     modifySTRef seq.fillCounter (\i -> i + 1)
     return s
+
+-- | Remove an element from the end of a mutable sequence.
+pop :: forall h a r. STSequence h a -> Eff (st :: ST h | r) (Maybe a)
+pop s@(STSequence seq) = do
+    fill <- readSTRef seq.fillCounter
+    if fill == 0
+        then return Nothing
+        else do
+            res <- runFn2 peekSTArrayImplUnsafe seq.buffer (fill - 1)
+            runFn3 pokeSTArray seq.buffer (fill - 1) (undef :: a)
+            modifySTRef seq.fillCounter (\i -> i - 1)
+            return (Just res)
 
 -- | Append the values in an immutable array to the end of a mutable sequence.
 pushAll :: forall h a r. STSequence h a -> Array a -> Eff (st :: ST h | r) (STSequence h a)
