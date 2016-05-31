@@ -3,14 +3,6 @@
 
 // module Data.STSequence
 
-exports.runSTArray = function (f) {
-  return f;
-};
-
-exports.emptySTArray = function () {
-  return [];
-};
-
 exports.peekSTArrayImplUnsafe = function (xs,i) {
     return function () {
       return xs[i];

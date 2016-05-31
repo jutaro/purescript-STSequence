@@ -31,19 +31,21 @@ module Data.STSequence (
     concat,
 
     peek,
+    first,
+    last,
     poke
     )
 
 where
 
-import Control.Monad.ST
+import Prelude
+import Control.Monad.ST (ST, STRef, readSTRef, writeSTRef, modifySTRef, newSTRef)
 import Data.Array as A
 import Control.Monad.Eff (Eff)
 import Data.Function (Fn2, runFn2, Fn3, runFn3, Fn4)
 import Data.Int (round, toNumber)
 import Data.Maybe (Maybe(Nothing, Just))
 import Extensions (undef, unsafeCoerce)
-import Prelude ((+), return, ($), bind, (++), (*), (>=), (==), (>), (-), (&&), (<), liftM1)
 
 foreign import data STArray :: * -> * -> *
 
@@ -212,6 +214,14 @@ peek seq@(STSequence s) i = do
     if i >= 0 && i < l
         then liftM1 Just (runFn2 peekSTArrayImplUnsafe s.buffer i)
         else return Nothing
+
+first :: forall a h r . STSequence h a -> Eff (st :: ST h | r) (Maybe a)
+first s@(STSequence seq) = peek s 0
+
+last :: forall a h r . STSequence h a -> Eff (st :: ST h | r) (Maybe a)
+last s@(STSequence seq) = do
+    fill <- readSTRef seq.fillCounter
+    peek s (fill - 1)
 
 
 -- | Change the value at the specified index in a mutable array.
