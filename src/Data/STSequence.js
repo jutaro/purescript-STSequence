@@ -46,3 +46,12 @@ exports.copyImpl = function (xs) {
     return xs.slice();
   };
 };
+
+exports.replicate = function (n) {
+  return function (v) {
+    if (n < 1) return [];
+    var r = new Array(n);
+    for (var i = 0; i < n; i++) r[i] = v;
+    return r;
+  };
+};

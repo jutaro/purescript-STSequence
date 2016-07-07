@@ -42,7 +42,7 @@ import Prelude
 import Control.Monad.ST (ST, STRef, readSTRef, writeSTRef, modifySTRef, newSTRef)
 import Data.Array as A
 import Control.Monad.Eff (Eff)
-import Data.Function (Fn2, runFn2, Fn3, runFn3, Fn4)
+import Data.Function.Uncurried (Fn2, runFn2, Fn3, runFn3, Fn4)
 import Data.Int (round, toNumber)
 import Data.Maybe (Maybe(Nothing, Just))
 import Extensions (undef, unsafeCoerce)
@@ -88,6 +88,9 @@ foreign import pushAllSTArray :: forall a h r. Fn2 (STArray h a) (Array a) (Eff 
 
 foreign import peekSTArrayImplUnsafe :: forall a h e. Fn2 (STArray h a) Int (Eff (st :: ST h | e) a)
 
+-- | Create an array with repeated instances of a value.
+foreign import replicate :: forall a. Int -> a -> Array a
+
 --------------------------------------------------------------------------------
 -- STSequence creation ---------------------------------------------------------
 ----------------------------
@@ -99,31 +102,31 @@ initialSize = 30
 -- |
 empty :: forall a h r. Eff (st :: ST h | r) (STSequence h a)
 empty = do
-    a <- thaw (A.replicate initialSize (undef :: a))
+    a <- thaw (replicate initialSize (undef :: a))
     ref <- newSTRef 0
-    return $ STSequence {buffer : a, fillCounter : ref}
+    pure $ STSequence {buffer : a, fillCounter : ref}
 
 -- | Create a sequence with with no elements with a specified buffer size.
 -- |
 emptyWithBufferSize :: forall a h r. Int -> Eff (st :: ST h | r) (STSequence h a)
 emptyWithBufferSize i = do
-    a <- thaw (A.replicate i (undef :: a))
+    a <- thaw (replicate i (undef :: a))
     ref <- newSTRef 0
-    return $ STSequence {buffer : a, fillCounter : ref}
+    pure $ STSequence {buffer : a, fillCounter : ref}
 
 -- | Convert an array to a STSequence
 fromArray ::  forall a h r. Array a -> Eff (st :: ST h | r) (STSequence h a)
 fromArray array = do
     let bufferGrowth = round (toNumber (A.length array) * 0.7)
-    a <- thaw (array ++ A.replicate bufferGrowth (undef :: a))
+    a <- thaw (array <> replicate bufferGrowth (undef :: a))
     ref <- newSTRef (A.length array)
-    return $ STSequence {buffer : a, fillCounter : ref}
+    pure $ STSequence {buffer : a, fillCounter : ref}
 
 -- | Convert a STSequence to an Array
 toArray ::  forall a h r. (STSequence h a) -> Eff (st :: ST h | r) (Array a)
 toArray (STSequence seq) = do
     fill <- readSTRef seq.fillCounter
-    return (A.slice 0 fill (unsafeFreeze seq.buffer))
+    pure (A.slice 0 fill (unsafeFreeze seq.buffer))
 
 --------------------------------------------------------------------------------
 -- STSequence size -------------------------------------------------------------------
@@ -133,7 +136,7 @@ toArray (STSequence seq) = do
 null :: forall h a r. STSequence h a -> Eff (st :: ST h | r) Boolean
 null seq = do
     l <- length seq
-    return (l == 0)
+    pure (l == 0)
 
 -- | Get the length of a sequence
 length :: forall h a r. STSequence h a ->  Eff (st :: ST h | r) Int
@@ -160,22 +163,22 @@ push s@(STSequence seq) ele = do
                 runFn3 pokeSTArray seq.buffer fill ele
         else do
                 let bufferGrowth = round (toNumber bs * 0.7)
-                runFn2 pushAllSTArray seq.buffer (A.replicate bufferGrowth (undef :: a))
+                runFn2 pushAllSTArray seq.buffer (replicate bufferGrowth (undef :: a))
                 runFn3 pokeSTArray seq.buffer fill ele
     modifySTRef seq.fillCounter (\i -> i + 1)
-    return s
+    pure s
 
 -- | Remove an element from the end of a mutable sequence.
 pop :: forall h a r. STSequence h a -> Eff (st :: ST h | r) (Maybe a)
 pop s@(STSequence seq) = do
     fill <- readSTRef seq.fillCounter
     if fill == 0
-        then return Nothing
+        then pure Nothing
         else do
             res <- runFn2 peekSTArrayImplUnsafe seq.buffer (fill - 1)
             runFn3 pokeSTArray seq.buffer (fill - 1) (undef :: a)
             modifySTRef seq.fillCounter (\i -> i - 1)
-            return (Just res)
+            pure (Just res)
 
 -- | Append the values in an immutable array to the end of a mutable sequence.
 pushAll :: forall h a r. STSequence h a -> Array a -> Eff (st :: ST h | r) (STSequence h a)
@@ -189,10 +192,10 @@ pushAll s@(STSequence seq) r = do
         else do
             let bufferNewSize = round (toNumber totalSize * 1.7)
                 bufferGrowth = bufferNewSize - bufferSize s
-            runFn2 pushAllSTArray seq.buffer (A.replicate bufferGrowth (undef :: a))
+            runFn2 pushAllSTArray seq.buffer (replicate bufferGrowth (undef :: a))
             runFn3 pokeAllSTArray seq.buffer fill r
     writeSTRef seq.fillCounter totalSize
-    return s
+    pure s
 
 -- | Concat two STSequences.
 -- TODO: optimize
@@ -213,7 +216,7 @@ peek seq@(STSequence s) i = do
     l <- length seq
     if i >= 0 && i < l
         then liftM1 Just (runFn2 peekSTArrayImplUnsafe s.buffer i)
-        else return Nothing
+        else pure Nothing
 
 first :: forall a h r . STSequence h a -> Eff (st :: ST h | r) (Maybe a)
 first s@(STSequence seq) = peek s 0
@@ -231,5 +234,5 @@ poke seq@(STSequence s) i val = do
     if i >= 0 && i < l
         then do
             runFn3 pokeSTArray s.buffer i val
-            return true
-        else return false
+            pure true
+        else pure false
