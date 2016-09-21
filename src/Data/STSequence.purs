@@ -33,7 +33,8 @@ module Data.STSequence (
     peek,
     first,
     last,
-    poke
+    poke,
+    update
     )
 
 where
@@ -234,5 +235,16 @@ poke seq@(STSequence s) i val = do
     if i >= 0 && i < l
         then do
             runFn3 pokeSTArray s.buffer i val
+            pure true
+        else pure false
+
+-- | Change the value at the specified index in a mutable array from a function, which receives the old value.
+update :: forall a h r. STSequence h a -> Int -> (a -> a) -> Eff (st :: ST h | r) Boolean
+update seq@(STSequence s) i func = do
+    l <- length seq
+    if i >= 0 && i < l
+        then do
+            old <- runFn2 peekSTArrayImplUnsafe s.buffer i
+            runFn3 pokeSTArray s.buffer i (func old)
             pure true
         else pure false
