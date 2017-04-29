@@ -48,7 +48,7 @@ import Data.Int (round, toNumber)
 import Data.Maybe (Maybe(Nothing, Just))
 import Extensions (undef, unsafeCoerce)
 
-foreign import data STArray :: * -> * -> *
+foreign import data STArray :: Type -> Type -> Type
 
 type STSequencePrim h a = {
     buffer :: STArray h a,
@@ -159,14 +159,14 @@ push :: forall h a r. STSequence h a -> a -> Eff (st :: ST h | r) (STSequence h 
 push s@(STSequence seq) ele = do
     fill <- readSTRef seq.fillCounter
     let bs = bufferSize s
-    if bs > fill
-        then do
-                runFn3 pokeSTArray seq.buffer fill ele
-        else do
-                let bufferGrowth = round (toNumber bs * 0.7)
-                runFn2 pushAllSTArray seq.buffer (replicate bufferGrowth (undef :: a))
-                runFn3 pokeSTArray seq.buffer fill ele
-    modifySTRef seq.fillCounter (\i -> i + 1)
+    _ <-  if bs > fill
+            then do
+                    runFn3 pokeSTArray seq.buffer fill ele
+            else do
+                    let bufferGrowth = round (toNumber bs * 0.7)
+                    _ <- runFn2 pushAllSTArray seq.buffer (replicate bufferGrowth (undef :: a))
+                    runFn3 pokeSTArray seq.buffer fill ele
+    _ <- modifySTRef seq.fillCounter (\i -> i + 1)
     pure s
 
 -- | Remove an element from the end of a mutable sequence.
@@ -177,8 +177,8 @@ pop s@(STSequence seq) = do
         then pure Nothing
         else do
             res <- runFn2 peekSTArrayImplUnsafe seq.buffer (fill - 1)
-            runFn3 pokeSTArray seq.buffer (fill - 1) (undef :: a)
-            modifySTRef seq.fillCounter (\i -> i - 1)
+            _ <- runFn3 pokeSTArray seq.buffer (fill - 1) (undef :: a)
+            _ <- modifySTRef seq.fillCounter (\i -> i - 1)
             pure (Just res)
 
 -- | Append the values in an immutable array to the end of a mutable sequence.
@@ -187,15 +187,15 @@ pushAll s@(STSequence seq) r = do
     fill <- length s
     let arrayLength = A.length r
         totalSize = fill + arrayLength
-    if bufferSize s >= totalSize
+    _ <- if bufferSize s >= totalSize
         then do
             runFn3 pokeAllSTArray seq.buffer fill r
         else do
             let bufferNewSize = round (toNumber totalSize * 1.7)
                 bufferGrowth = bufferNewSize - bufferSize s
-            runFn2 pushAllSTArray seq.buffer (replicate bufferGrowth (undef :: a))
+            _ <- runFn2 pushAllSTArray seq.buffer (replicate bufferGrowth (undef :: a))
             runFn3 pokeAllSTArray seq.buffer fill r
-    writeSTRef seq.fillCounter totalSize
+    _ <- writeSTRef seq.fillCounter totalSize
     pure s
 
 -- | Concat two STSequences.
@@ -234,7 +234,7 @@ poke seq@(STSequence s) i val = do
     l <- length seq
     if i >= 0 && i < l
         then do
-            runFn3 pokeSTArray s.buffer i val
+            _ <- runFn3 pokeSTArray s.buffer i val
             pure true
         else pure false
 
@@ -245,6 +245,6 @@ update seq@(STSequence s) i func = do
     if i >= 0 && i < l
         then do
             old <- runFn2 peekSTArrayImplUnsafe s.buffer i
-            runFn3 pokeSTArray s.buffer i (func old)
+            _ <- runFn3 pokeSTArray s.buffer i (func old)
             pure true
         else pure false
