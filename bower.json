@@ -14,15 +14,18 @@
     "output"
   ],
   "dependencies": {
-    "purescript-arrays": "^4.0.1",
+    "purescript-arrays": "^4.2.0",
     "purescript-eff": "^3.1.0",
     "purescript-st": "^3.0.0",
-    "purescript-extensions": "^2.0.0",
+    "purescript-extensions": "^2.2.0",
     "purescript-functions": "^3.0.0",
-    "purescript-integers": "^3.0.0"
+    "purescript-integers": "^3.1.0"
   },
   "devDependencies": {
     "purescript-assert": "^3.0.0",
     "purescript-console": "^3.0.0"
+  },
+  "resolutions": {
+    "purescript-extensions": "^2.2.0"
   }
 }
